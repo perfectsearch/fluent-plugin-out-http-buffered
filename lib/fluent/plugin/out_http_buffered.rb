@@ -66,7 +66,7 @@ module Fluent
     def write(chunk)
       data = []
       chunk.msgpack_each do |(tag, time, record)|
-        data << [tag, time, record]
+        data << record#[tag, time, record]
       end
 
       request = create_request(data)
@@ -98,12 +98,13 @@ module Fluent
         request = Net::HTTP::Post.new(@uri.request_uri)
 
         # Headers
-        request['Content-Type'] = 'application/json'
+        request['Content-Type'] = 'application/xml'
 
         # Body
-        request.body = JSON.dump(data)
+        request.body = data.join("\n")#JSON.dump(data)
 
         request
       end
   end
 end
+
