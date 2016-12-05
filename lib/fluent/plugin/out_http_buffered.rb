@@ -1,9 +1,20 @@
 # encoding: utf-8
 
-module Fluent
+require "fluent/plugin/output"
+
+module Fluent::Plugin
   # Main Output plugin class
-  class HttpBufferedOutput < Fluent::BufferedOutput
+  class HttpBufferedOutput < Output
     Fluent::Plugin.register_output('http_buffered', self)
+
+    # Endpoint URL ex. localhost.local/api/
+    config_param :endpoint_url, :string
+    # statuses under which to retry
+    config_param :http_retry_statuses, :string, default: ''
+    # read timeout for the http call
+    config_param :http_read_timeout, :float, default: 2.0
+    # open timeout for the http call
+    config_param :http_open_timeout, :float, default: 2.0
 
     def initialize
       super
@@ -11,20 +22,12 @@ module Fluent
       require 'uri'
     end
 
-    # Endpoint URL ex. localhost.local/api/
-    config_param :endpoint_url, :string
-
-    # statuses under which to retry
-    config_param :http_retry_statuses, :string, default: ''
-
-    # read timeout for the http call
-    config_param :http_read_timeout, :float, default: 2.0
-
-    # open timeout for the http call
-    config_param :http_open_timeout, :float, default: 2.0
-
     def configure(conf)
       super
+
+      # Allows for time formatted endpoints
+      date = Time.now
+      @endpoint_url = date.strftime(@endpoint_url)
 
       # Check if endpoint URL is valid
       unless @endpoint_url =~ /^#{URI.regexp}$/
@@ -63,6 +66,10 @@ module Fluent
       [tag, time, record].to_msgpack
     end
 
+    def formatted_to_msgpack_binary
+      true
+    end
+
     def write(chunk)
       data = []
       chunk.msgpack_each do |(tag, time, record)|
@@ -90,6 +97,10 @@ module Fluent
         rescue
         end
       end
+    end
+
+    def compat_parameters_default_chunk_key
+      return ""
     end
 
     protected
