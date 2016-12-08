@@ -62,18 +62,10 @@ module Fluent::Plugin
       end
     end
 
-    def format(tag, time, record)
-      [tag, time, record].to_msgpack
-    end
-
-    def formatted_to_msgpack_binary
-      true
-    end
-
     def write(chunk)
       data = []
-      chunk.msgpack_each do |(tag, time, record)|
-        data << record#[tag, time, record]
+      chunk.each do |time, record|
+        data << record
       end
 
       request = create_request(data)
@@ -88,9 +80,13 @@ module Fluent::Plugin
           # Raise an exception so that fluent retries
           fail "Server returned bad status: #{response.code}"
         end
+      rescue Net::ReadTimeout, Net::OpenTimeout => e
+        $log.warn "Net::Timeout exception: #{e.class} => '#{e.message}'"
+        raise
       rescue IOError, EOFError, SystemCallError => e
         # server didn't respond
-        $log.warn "Net::HTTP.#{request.method.capitalize} raises exception: #{e.class}, '#{e.message}'"
+        $log.warn "Net::HTTP.#{request.method.capitalize} exception: #{e.class} => '#{e.message}'"
+        raise
       ensure
         begin
           @http.finish
