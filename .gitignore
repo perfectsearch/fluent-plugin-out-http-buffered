@@ -2,3 +2,4 @@ Gemfile.lock
 
 #Gem builds
 fluent-plugin-out-http-buffered-*.gem
+.*.swp

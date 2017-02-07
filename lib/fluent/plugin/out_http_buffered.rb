@@ -15,6 +15,8 @@ module Fluent::Plugin
     config_param :http_read_timeout, :float, default: 2.0
     # open timeout for the http call
     config_param :http_open_timeout, :float, default: 2.0
+    # to perform validation on entries before sending them
+    config_param :record_contains, :string, default: ''
 
     def initialize
       super
@@ -25,29 +27,18 @@ module Fluent::Plugin
     def configure(conf)
       super
 
-      # Allows for time formatted endpoints
-      date = Time.now
-      @endpoint_url = date.strftime(@endpoint_url)
-
-      # Check if endpoint URL is valid
-      unless @endpoint_url =~ /^#{URI.regexp}$/
-        fail Fluent::ConfigError, 'endpoint_url invalid'
-      end
-
-      begin
-        @uri = URI.parse(@endpoint_url)
-      rescue URI::InvalidURIError
-        raise Fluent::ConfigError, 'endpoint_url invalid'
-      end
+      # Validates the endpoint_url and returns uri and http objects
+      @uri, @http = create_http(@endpoint_url)
 
       # Parse http statuses
       @statuses = @http_retry_statuses.split(',').map { |status| status.to_i }
 
       @statuses = [] if @statuses.nil?
 
-      @http = Net::HTTP.new(@uri.host, @uri.port)
-      @http.read_timeout = @http_read_timeout
-      @http.open_timeout = @http_open_timeout
+      # Parse the record contains
+      @contains = @record_contains.split(',').map { |match| match.strip }
+
+      @contains = [] if @contains.nil?
     end
 
     def start
@@ -65,9 +56,23 @@ module Fluent::Plugin
     def write(chunk)
       data = []
       chunk.each do |time, record|
-        data << record
+        # Don't add records to the data to send if it's nil/empty, or if it
+        # doesn't contain the configured strings
+        if !record.nil? && @contains.all? { |match| record.include?(match) }
+          data << record
+        end
       end
 
+      # If the chunk was empty, or none of the records passed validation, go
+      # ahead and return a successful flush
+      if data.size() == 0
+        return
+      end
+
+      # Do this with every write so that the chunk is written to the right dated endpoint
+      @uri, @http = create_http(@endpoint_url)
+
+      # Needed for retrying to flush chunks
       request = create_request(data)
 
       begin
@@ -100,6 +105,29 @@ module Fluent::Plugin
     end
 
     protected
+
+      def create_http(url)
+        # Allows for time formatted endpoints
+        date = Time.now
+        endpoint = date.strftime(url)
+  
+        # Check if endpoint URL is valid
+        unless endpoint =~ /^#{URI.regexp}$/
+          fail Fluent::ConfigError, 'endpoint_url invalid'
+        end
+  
+        begin
+          uri = URI.parse(endpoint)
+        rescue URI::InvalidURIError
+          raise Fluent::ConfigError, 'endpoint_url invalid'
+        end
+
+        http = Net::HTTP.new(uri.host, uri.port)
+        http.read_timeout = @http_read_timeout
+        http.open_timeout = @http_open_timeout
+
+        return uri, http
+      end
 
       def create_request(data)
         request = Net::HTTP::Post.new(@uri.request_uri)
