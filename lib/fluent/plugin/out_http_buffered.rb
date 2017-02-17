@@ -80,7 +80,7 @@ module Fluent::Plugin
           $log.debug "HTTPBufferedOut: Closing HTTP connection"
           http.finish
         rescue Exception => e
-          $log.warn "HTTPBufferedOut: Error occured closing HTTP connection"
+          $log.error "HTTPBufferedOut: Error occured closing HTTP connection"
           $log.debug "HTTPBufferedOut: #{e.class} => #{e.message}"
           $log.trace "HTTPBufferedOut: #{e.backtrace.join("\n\t")}"
         end
