@@ -139,6 +139,11 @@ module Fluent::Plugin
           # server didn't respond
           $log.warn "Net::HTTP.POST exception: #{e.class} => '#{e.message}'"
           raise
+        rescue Exception => e
+          $log.error "HTTPBufferedOut: Unexpected error while sending data"
+          $log.error "HTTPBufferedOut: #{e.class} => '#{e.message}'"
+          $log.trace "HTTPBufferedOut: #{e.backtrace.join("\n\t")}"
+          raise
         end
       end
     end
